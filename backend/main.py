@@ -5,8 +5,13 @@ import shutil
 from backend.scraper import scrape_jobs
 from backend.ai_matcher import analyze_match, extract_text
 from backend.database import get_db_connection
+from fastapi.responses import RedirectResponse
 
 app = FastAPI(title="AI Job Matcher", description="Kişiselleştirilmiş İş Eşleştirme Motoru")
+
+@app.get("/")
+def ana_sayfadan_arayuze_yonlendir():
+    return RedirectResponse(url="/docs")
 
 @app.post("/api/profile")
 def create_profile(
