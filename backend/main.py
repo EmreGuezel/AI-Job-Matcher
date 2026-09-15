@@ -12,6 +12,13 @@ from backend.experience import LEVEL_RANK, TR_LABELS, cv_profile
 # (1 kademe üst gösterilir ama uyarı etiketiyle.)
 AUTO_HIDE_GAP = 2
 
+# Gizleme sonrası en az bu kadar ilan kalmalı. Kalmiyorsa en yakın seviyeli
+# gizlenenler geri konur (uyarı etiketiyle). Amaç: kullanıcı hiçbir zaman
+# "ilan bulunamadı" ile karşılaşmasın — taze mezun bir CV'de ilanların çoğu
+# Mid-Senior çıktığı için katı gizleme listeyi tamamen boşaltabiliyor.
+# Ölçüm: "python" aramasında 25 ilan bulunup 20'si gizlenmişti.
+MIN_RESULTS = int(os.getenv("MATCH_MIN_RESULTS", "5"))
+
 app = FastAPI(title="AI Job Matcher", description="Kişiselleştirilmiş İş Eşleştirme Motoru")
 
 # 1. Şablon (Template) klasörünün yolunu belirle
@@ -109,18 +116,29 @@ def match_and_sort(
     gizlenen = 0
 
     if level == "auto":
-        # Adayın seviyesinin 2+ kademe üstündeki ilanlar hiç gösterilmez;
+        # Adayın seviyesinin 2+ kademe üstündeki ilanlar gizlenir;
         # 1 kademe üsttekiler düşük puan + uyarı etiketiyle kalır.
         # Tahmin yapılamadıysa hiçbir şey gizlenmez.
         if cv_rank is not None:
-            kept = []
+            kept, hidden = [], []
             for job in jobs:
                 job_rank = LEVEL_RANK.get(job.get("Deneyim_Seviyesi"))
                 if job_rank is not None and job_rank - cv_rank >= AUTO_HIDE_GAP:
-                    continue
-                kept.append(job)
-            gizlenen = len(jobs) - len(kept)
-            jobs = kept
+                    hidden.append(job)
+                else:
+                    kept.append(job)
+
+            # Yeterli ilan kalmadıysa en YAKIN seviyeli gizlenenleri geri koy.
+            # Hiç ilan göstermemek, seviyesi yüksek birkaç ilan göstermekten
+            # daha kötü — uyarı etiketi zaten durumu anlatıyor.
+            if len(kept) < MIN_RESULTS and hidden:
+                hidden.sort(key=lambda j: LEVEL_RANK.get(j.get("Deneyim_Seviyesi"), 99))
+                need = MIN_RESULTS - len(kept)
+                jobs = kept + hidden[:need]
+                gizlenen = len(hidden) - min(need, len(hidden))
+            else:
+                jobs = kept
+                gizlenen = len(hidden)
     elif level and level != "all":
         jobs = [j for j in jobs if j.get("Deneyim_Seviyesi") == level]
         if not jobs:

@@ -34,18 +34,31 @@ DESCRIPTION_LIMIT = 4000
 
 # Ağ ayarları.
 #
-# Ölçülen gerçek gecikmeler (JSearch, search-v2): 2.7 / 4.8 / 18.9 / 30.3 sn.
-# Yani servis YAVAŞ ama çoğu zaman başarılı. Bu yüzden:
-#   * okuma süresi gözlemlenen en kötü değerin (30 sn) üstünde olmalı —
-#     daha kısası yavaş ama BAŞARILI istekleri keser.
-#   * toplam süre bir bütçeyle sınırlanır ki tekrar deneme sunucu tarafı
-#     fonksiyon limitini aşmasın (eskiden tek deneme 60 sn'ydi).
-# İkisi de ortam değişkeniyle ayarlanabilir.
+# Ölçülen GERÇEK JSearch gecikmeleri (search-v2, aralarda bekleme ile):
+#   5.3 / 18.9 / 41.4 / 53.1 / 55.3 / 60.7 saniye.
+# Yani servis 5-61 sn arasında değişiyor ve yavaş uç ~55-61 sn. Bu yüzden:
+#
+#   * Okuma süresi bu aralığın ÜSTÜNDE olmalı. 45 sn denendi ve YANLIŞTI:
+#     55 ve 60 sn süren ama BAŞARILI olan istekleri kesiyordu — kullanıcının
+#     gördüğü "ilan bulunamadı" hatalarının bir kısmı buydu, servis hatası
+#     değil bizim erken pes etmemizdi.
+#   * Tekrar deneme yalnızca HIZLI başarısız olan denemelerde işe yarar;
+#     uzun bir denemeden sonra bütçe kalmadığı için zaten yapılmaz
+#     (aşağıdaki deadline kontrolü).
+#   * Toplam bütçe, sunucu tarafı fonksiyon limitinin altında kalmalı.
+#     Vercel'de limit daha düşükse SCRAPE_DEADLINE ile küçültün.
 CONNECT_TIMEOUT = 10
-READ_TIMEOUT = int(os.getenv("SCRAPE_READ_TIMEOUT", "45"))
-REQUEST_DEADLINE = float(os.getenv("SCRAPE_DEADLINE", "75"))
+READ_TIMEOUT = int(os.getenv("SCRAPE_READ_TIMEOUT", "65"))
+REQUEST_DEADLINE = float(os.getenv("SCRAPE_DEADLINE", "70"))
 REQUEST_RETRIES = 1
 RETRY_BACKOFF = 2
+
+# JSearch boş döndüğünde tekrar denemek için üst süre sınırı. Aynı sorgu
+# ölçümde 10 / 0 / 10 ilan döndürdü — yani boş yanıt her zaman "ilan yok"
+# demek değil. HIZLI gelen boş yanıt geçici bir aksaklıktır ve tekrar
+# denenir; YAVAŞ gelen boş yanıt gerçek kapsam yokluğudur (ör. Almanya
+# 45-75 sn sürüp 0 ilan döndürüyor) ve tekrar denemek sadece bekletir.
+EMPTY_RETRY_MAX_SECONDS = 20
 
 CSV_PATH = "/tmp/jobs.csv"
 
@@ -271,6 +284,7 @@ def scrape_jobs(keyword="python developer", location="USA", level="all"):
 
     # Ülke geneli Türkiye ("Türkiye"/"Turkey") de Jooble'a gider. Bir il adı
     # seçildiyse o il, ülke seçildiyse "Türkiye" konum olarak gönderilir.
+    start = time.monotonic()
     if province or folded in _TURKEY_ALIASES:
         rows = _scrape_jooble(keyword, province or "Türkiye", level)
         source = "Jooble"
@@ -278,18 +292,28 @@ def scrape_jobs(keyword="python developer", location="USA", level="all"):
         rows = _scrape_jsearch(keyword, location, level)
         source = "JSearch"
 
+    # JSearch boş döndüyse ve yanıt HIZLI geldiyse bir kez daha dene —
+    # ölçümde aynı sorgu bazen 0 bazen 10 ilan döndürüyor. Yavaş gelen boş
+    # yanıtta tekrar denemek yalnızca beklemeyi ikiye katlar, o yüzden
+    # yalnızca hızlı boş yanıtlar tazelenir.
+    if (not rows and source == "JSearch"
+            and time.monotonic() - start < EMPTY_RETRY_MAX_SECONDS):
+        try:
+            rows = _scrape_jsearch(keyword, location, level)
+        except RuntimeError:
+            rows = []          # ikinci deneme de başarısız — aşağıda raporlanır
+
     if not rows:
-        # Kapsam gerçeği: JSearch çoğu ülkede ilan indekslemiyor. Canlı test:
-        # ABD ve Kanada → sonuç var; Almanya/Avustralya/Hollanda → 0 ilan;
-        # İngiltere/Hindistan → zaman aşımı. Kullanıcıya bunun bir hata değil
-        # kapsam sınırı olduğunu söylemek gerekiyor — bu yüzden mesajda
-        # yalnızca DOĞRULANMIŞ ülkeler sayılıyor.
+        # Kapsam gerçeği. Canlı testte: ABD ve Kanada sonuç verdi; Almanya,
+        # Avustralya, Hollanda 0 ilan; İngiltere, Hindistan zaman aşımı.
+        # Ayrıca JSearch AYNI sorguya bazen 10 bazen 0 ilan döndürüyor —
+        # bu yüzden mesaj kesin bir "burada ilan yok" iddiası kurmuyor.
         if source == "JSearch":
             raise RuntimeError(
                 f"'{keyword} / {location}' için ilan bulunamadı. JSearch her "
-                f"ülkeyi indekslemiyor — testte yalnızca ABD ve Kanada sonuç "
-                f"döndürdü. Türkiye aramaları Jooble üzerinden çalışır. "
-                f"Farklı bir konum ya da İngilizce anahtar kelime dene."
+                f"ülkeyi indekslemiyor (testte ABD ve Kanada sonuç verdi) ve "
+                f"aynı sorguya bazen boş yanıt döndürüyor — tekrar denemek "
+                f"işe yarayabilir. Türkiye aramaları Jooble üzerinden çalışır."
             )
         raise RuntimeError(
             f"'{keyword} / {location}' için ilan bulunamadı. "
