@@ -156,6 +156,7 @@
                         <div class="text-center">
                             <p class="text-slate-800 dark:text-slate-200 font-bold">İlanlar Analiz Ediliyor</p>
                             <p class="text-slate-500 dark:text-slate-400 text-sm animate-pulse mt-1">Özgeçmişin ilanlarla karşılaştırılıyor...</p>
+                            <p id="loadingSlowHint" class="hidden text-amber-600 dark:text-amber-400 text-xs mt-2">İlan servisi yavaş yanıt veriyor — bu 1 dakikaya kadar sürebilir.</p>
                         </div>
                     </div>
                 </div>
@@ -185,6 +186,13 @@
         // [Türkçe görünen ad, JSearch'e gönderilen ad]
         // Listede Türkçe ad görünür ama arama motoruna İngilizce ad gider:
         // Google for Jobs İngilizce ülke adlarını çok daha güvenilir tanıyor.
+        //
+        // Canlı testte ilan DÖNDÜREN konumlar. JSearch her ülkeyi indekslemiyor:
+        // Almanya/Avustralya/Hollanda → 0 ilan, İngiltere/Hindistan → zaman
+        // aşımı. Bu yüzden listede yalnızca doğrulanmış olanlar ✅ ile
+        // işaretlenir. Türkiye (ülke geneli ve 81 il) Jooble üzerinden çalışır.
+        const WORKING_COUNTRIES = new Set(["United States", "Canada", "Turkey"]);
+
         const COUNTRIES = [
             ["Afganistan", "Afghanistan"],
             ["Almanya", "Germany"],
@@ -423,7 +431,8 @@
             worldGroup.label = '🌍 Diğer Ülkeler';
             [...COUNTRIES]
                 .sort((a, b) => a[0].localeCompare(b[0], 'tr'))
-                .forEach(([tr, en]) => worldGroup.appendChild(new Option(tr, en)));
+                .forEach(([tr, en]) => worldGroup.appendChild(
+                    new Option(WORKING_COUNTRIES.has(en) ? `✅ ${tr}` : tr, en)));
             locationSelect.appendChild(worldGroup);
 
             locationSelect.appendChild(new Option('✏️ Diğer (şehir yaz)', OTHER_VALUE));
@@ -522,6 +531,13 @@
             loading.classList.add('flex');
             resultDiv.innerHTML = "";
 
+            // JSearch bazı konumlarda 60 sn'ye kadar bekletiyor. Sessizce
+            // dönen bir spinner "bozuk" gibi görünüyor — bir süre sonra
+            // beklemenin normal olduğunu söyle.
+            const slowHint = document.getElementById('loadingSlowHint');
+            slowHint.classList.add('hidden');
+            const slowTimer = setTimeout(() => slowHint.classList.remove('hidden'), 12000);
+
             const formData = new FormData();
             formData.append('username', document.getElementById('match_username').value);
             formData.append('keyword', document.getElementById('keyword').value);
@@ -598,6 +614,7 @@
             } catch (err) {
                 resultDiv.innerHTML = `<div class="p-4 bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-200 rounded-xl border border-red-200 dark:border-red-800 font-bold">Bağlantı hatası oluştu. Lütfen tekrar deneyin.</div>`;
             } finally {
+                clearTimeout(slowTimer);
                 btn.disabled = false;
                 btn.classList.remove('opacity-70');
                 loading.classList.add('hidden');

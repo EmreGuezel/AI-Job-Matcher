@@ -1,10 +1,11 @@
 """İlan toplama katmanı — iki kaynak, konuma göre otomatik yönlendirme.
 
-JSearch : ABD / Kanada / İngiltere / BAE / Hindistan. Türkiye kapsamı YOK
-          (test edildi: İstanbul, Ankara, İzmir → 0 ilan).
-Jooble  : Türkiye kapsamı var ama tr.jooble.org'dan alınmış AYRI bir API
-          anahtarı gerektiriyor. Anahtar yoksa Türkiye aramaları anlamlı
-          bir hata mesajı döner.
+JSearch : Canlı testte YALNIZCA ABD ve Kanada sonuç döndürdü. Almanya,
+          Avustralya ve Hollanda 0 ilan; İngiltere ve Hindistan zaman aşımı.
+          Türkiye kapsamı HİÇ yok — ülke/şehir seçimi fark etmiyor.
+Jooble  : Türkiye (hem il hem ülke geneli). tr.jooble.org'dan alınmış AYRI
+          bir API anahtarı gerektiriyor. Anahtar yoksa anlamlı bir hata
+          mesajı döner.
 
 Not: Jooble ücretsiz planı 500 istek/ÖMÜR BOYU (aylık değil) ve açıklama
 alanı kırpılmış "snippet" olarak geliyor — bu, yerel TF-IDF eşleştirmesinin
@@ -70,6 +71,13 @@ TURKISH_PROVINCES = {
 # Serbest metin kutusuna küçük harfle ("ankara") veya Türkçe imlasız
 # ("istanbul") yazılsa da doğru kaynağa gidilsin diye katlanmış eşleme.
 _TURKISH_FOLDED = {_fold(p): p for p in TURKISH_PROVINCES}
+
+# ÜLKE GENELİ Türkiye seçimi de Jooble'a gitmeli. Arayüzdeki ülke listesinde
+# "Türkiye" → "Turkey" değeri gönderiliyor ve bu değer bir il adı olmadığı
+# için eskiden JSearch'e düşüyordu — JSearch'te ise Türkiye kapsamı HİÇ yok,
+# bu yüzden ülke geneli aramalar her seferinde "ilan bulunamadı" veriyordu.
+# Jooble "Türkiye" konumunu destekliyor (test: 30 ilan).
+_TURKEY_ALIASES = {"turkiye", "turkey", "turkiye cumhuriyeti", "tr"}
 
 
 _HTML_TAG_RE = re.compile(r"<[^>]+>")
@@ -258,24 +266,29 @@ def scrape_jobs(keyword="python developer", location="USA", level="all"):
     """
     # "ankara" -> "Ankara": hem kaynağı doğru seçer hem Jooble'a düzgün
     # yazımlı şehir adı gönderir.
-    province = _TURKISH_FOLDED.get(_fold(location or ""))
+    folded = _fold(location or "")
+    province = _TURKISH_FOLDED.get(folded)
 
-    if province:
-        rows = _scrape_jooble(keyword, province, level)
+    # Ülke geneli Türkiye ("Türkiye"/"Turkey") de Jooble'a gider. Bir il adı
+    # seçildiyse o il, ülke seçildiyse "Türkiye" konum olarak gönderilir.
+    if province or folded in _TURKEY_ALIASES:
+        rows = _scrape_jooble(keyword, province or "Türkiye", level)
         source = "Jooble"
     else:
         rows = _scrape_jsearch(keyword, location, level)
         source = "JSearch"
 
     if not rows:
-        # Kapsam gerçeği: JSearch çoğu ülkede ilan indekslemiyor. Ölçüldü:
-        # "python developer" + Germany/Berlin → 0 ilan. Kullanıcıya bunun bir
-        # hata değil kapsam sınırı olduğunu söylemek gerekiyor.
+        # Kapsam gerçeği: JSearch çoğu ülkede ilan indekslemiyor. Canlı test:
+        # ABD ve Kanada → sonuç var; Almanya/Avustralya/Hollanda → 0 ilan;
+        # İngiltere/Hindistan → zaman aşımı. Kullanıcıya bunun bir hata değil
+        # kapsam sınırı olduğunu söylemek gerekiyor — bu yüzden mesajda
+        # yalnızca DOĞRULANMIŞ ülkeler sayılıyor.
         if source == "JSearch":
             raise RuntimeError(
-                f"'{keyword} / {location}' için ilan bulunamadı. JSearch "
-                f"ağırlıklı olarak ABD, Kanada, İngiltere, Avustralya ve "
-                f"Hindistan'ı kapsıyor — seçtiğin ülkede kapsam zayıf olabilir. "
+                f"'{keyword} / {location}' için ilan bulunamadı. JSearch her "
+                f"ülkeyi indekslemiyor — testte yalnızca ABD ve Kanada sonuç "
+                f"döndürdü. Türkiye aramaları Jooble üzerinden çalışır. "
                 f"Farklı bir konum ya da İngilizce anahtar kelime dene."
             )
         raise RuntimeError(
