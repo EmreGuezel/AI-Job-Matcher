@@ -6,6 +6,11 @@ import shutil
 from backend.scraper import CSV_PATH, scrape_jobs
 from backend.ai_matcher import analyze_matches, extract_text
 from backend.database import get_db_connection
+from backend.experience import LEVEL_RANK, TR_LABELS, cv_profile
+
+# "auto" seçilince adayın seviyesinin bu kadar üstündeki ilanlar gizlenir.
+# (1 kademe üst gösterilir ama uyarı etiketiyle.)
+AUTO_HIDE_GAP = 2
 
 app = FastAPI(title="AI Job Matcher", description="Kişiselleştirilmiş İş Eşleştirme Motoru")
 
@@ -47,14 +52,23 @@ def create_profile(
     conn.commit()
     conn.close()
 
-    return {"status": "Başarılı", "mesaj": f"Tebrikler! {username} profili oluşturuldu."}
+    # Arayüz "Deneyim Seviyesi" menüsünü bu tahminle otomatik seçiyor.
+    cv_level, cv_years = cv_profile(cv_text)
+
+    return {
+        "status": "Başarılı",
+        "mesaj": f"Tebrikler! {username} profili oluşturuldu.",
+        "seviye_tahmini": cv_level,
+        "seviye_tahmini_etiket": TR_LABELS.get(cv_level, "") if cv_level else "",
+        "deneyim_yili": cv_years,
+    }
 
 @app.post("/api/match")
 def match_and_sort(
     username: str = Form(...),
     keyword: str = Form(...),
     location: str = Form(...),
-    level: str = Form("all")
+    level: str = Form("auto")
 ):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -64,6 +78,12 @@ def match_and_sort(
         return {"error": "Kullanıcı bulunamadı. Lütfen önce yukarıdan profil oluşturun."}
 
     cv_text = user["cv_text"]
+
+    # Adayın kendi kıdemi ve deneyim yılı — puanlamanın kıdem farkındalığı
+    # buradan geliyor. Tahmin edilemezse None/0.0 döner, o zaman düzeltme
+    # uygulanmaz (bkz. experience.cv_profile).
+    cv_level, cv_years = cv_profile(cv_text)
+    cv_rank = LEVEL_RANK.get(cv_level) if cv_level else None
 
     # Kazıma başarısız olursa burada dur — aksi halde /tmp'de duran ÖNCEKİ
     # aramanın CSV'si sessizce yeniden puanlanırdı.
@@ -86,7 +106,22 @@ def match_and_sort(
     # Seviye süzgeci burada uygulanır (kaynak filtreleri güvenilmez olduğu için
     # seviye başlık/açıklamadan tahmin ediliyor — bkz. experience.py)
     total_found = len(jobs)
-    if level and level != "all":
+    gizlenen = 0
+
+    if level == "auto":
+        # Adayın seviyesinin 2+ kademe üstündeki ilanlar hiç gösterilmez;
+        # 1 kademe üsttekiler düşük puan + uyarı etiketiyle kalır.
+        # Tahmin yapılamadıysa hiçbir şey gizlenmez.
+        if cv_rank is not None:
+            kept = []
+            for job in jobs:
+                job_rank = LEVEL_RANK.get(job.get("Deneyim_Seviyesi"))
+                if job_rank is not None and job_rank - cv_rank >= AUTO_HIDE_GAP:
+                    continue
+                kept.append(job)
+            gizlenen = len(jobs) - len(kept)
+            jobs = kept
+    elif level and level != "all":
         jobs = [j for j in jobs if j.get("Deneyim_Seviyesi") == level]
         if not jobs:
             return {"error": f"{total_found} ilan bulundu ama hiçbiri "
@@ -94,17 +129,32 @@ def match_and_sort(
                              f"Seviye tahmini ilan başlığına dayanıyor — "
                              f"'Tüm Seviyeler' seçeneğini deneyin."}
 
+    if not jobs:
+        return {"error": f"{total_found} ilan bulundu ama hiçbiri seviyene "
+                         f"uygun değil. 'Tüm Seviyeler' seçeneğini deneyin."}
+
     # Tüm ilanlar TEK SEFERDE puanlanır: IDF tüm korpus üzerinden hesaplandığı
     # için ilan başına ayrı çağrı yapılırsa skorlar anlamsızlaşır.
-    scored = analyze_matches(cv_text, jobs)
+    scored = analyze_matches(cv_text, jobs, cv_level=cv_level, cv_years=cv_years)
 
     results = []
     for row, ai_result in zip(jobs, scored):
+        gap = ai_result.get("level_gap")
+        if gap == 1:
+            uyari = "Bir kademe üstün"
+        elif gap == 2:
+            uyari = "İki kademe üstün"
+        elif gap is not None and gap >= 3:
+            uyari = "Seviyenin çok üstünde"
+        else:
+            uyari = ""
+
         match_data = {
             "Sirket": row.get('Şirket', ''),
             "Pozisyon": row.get('Pozisyon', ''),
             "Sehir": row.get('Şehir', ''),
             "Seviye": row.get('Deneyim_Seviyesi', '') or "Belirsiz",
+            "Seviye_Uyarisi": uyari,
             "Eslesme_Orani": ai_result.get("percentage", 0),
             "Analiz": ai_result.get("analysis", "Analiz yapılamadı"),
             "Link": row.get('Link', '')
@@ -126,4 +176,8 @@ def match_and_sort(
         "siralı_ilanlar": sorted_results,
         "bilgi": scrape_info,
         "toplam_bulunan": total_found,
+        "gizlenen": gizlenen,
+        "seviye_tahmini": cv_level,
+        "seviye_tahmini_etiket": TR_LABELS.get(cv_level, cv_level or ""),
+        "deneyim_yili": cv_years,
     }

@@ -11,7 +11,9 @@ alanı kırpılmış "snippet" olarak geliyor — bu, yerel TF-IDF eşleştirmes
 isabetini JSearch'e göre düşürür.
 """
 
+import html
 import os
+import re
 
 import pandas as pd
 import requests
@@ -50,6 +52,29 @@ TURKISH_PROVINCES = {
 # Serbest metin kutusuna küçük harfle ("ankara") veya Türkçe imlasız
 # ("istanbul") yazılsa da doğru kaynağa gidilsin diye katlanmış eşleme.
 _TURKISH_FOLDED = {_fold(p): p for p in TURKISH_PROVINCES}
+
+
+_HTML_TAG_RE = re.compile(r"<[^>]+>")
+
+
+def _clean_snippet(raw):
+    """Jooble snippet'ını düz metne çevirir.
+
+    Jooble HTML parçaları gönderiyor — <b> vurguları, &nbsp; varlıkları,
+    NBSP ve \\r\\n karışımı. Snippet zaten ~300 karakter olduğu için bu
+    gürültü eşleştirmeyi ciddi biçimde bozuyor.
+
+    Not: Türkçe karakterler kaynakta bozulup U+FFFD'ye (�) dönüşmüş
+    olabiliyor. Bu kayıp geri getirilemez, sadece temizlenir.
+    """
+    if not raw:
+        return ""
+    text = html.unescape(raw)            # &nbsp; -> \xa0, &amp; -> &
+    text = _HTML_TAG_RE.sub(" ", text)   # <b>, </b>, <br/> ...
+    text = text.replace("�", " ")   # kaynakta kaybolmuş karakterler
+    text = text.replace("\xa0", " ")     # NBSP
+    text = re.sub(r"\s+", " ", text)
+    return text.strip()
 
 
 def _row(title, company, city, link, description):
@@ -120,7 +145,7 @@ def _scrape_jooble(keyword, location, level):
             job.get("company"),
             job.get("location") or location,
             job.get("link"),
-            job.get("snippet"),
+            _clean_snippet(job.get("snippet")),
         ))
     return rows
 
