@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="tr" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Job Matcher | Kişiselleştirilmiş Kariyer Asistanı</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tailwind Dark Mode Yapılandırması -->
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+        }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; transition: background-color 0.3s, color 0.3s; }
+        .glass-card { 
+            background: rgba(255, 255, 255, 0.95); 
+            backdrop-filter: blur(10px); 
+        }
+        .dark .glass-card {
+            background: rgba(30, 41, 59, 0.95); 
+        }
+        /* Vurgulu Arka Plan */
+        .highlight-bg {
+            background-color: #fca5a5; /* Kırmızımsı vurgu */
+            color: #450a0a;
+        }
+        .dark .highlight-bg {
+            background-color: rgba(153, 27, 27, 0.4);
+            color: #fca5a5;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-black min-h-screen p-4 md:p-8 text-slate-800 dark:text-slate-100">
+    
+    <!-- Gece/Gündüz Modu Butonu -->
+    <button id="themeToggle" class="fixed top-4 right-4 md:top-6 md:right-8 p-3 rounded-full bg-white dark:bg-slate-800 shadow-lg border border-slate-200 dark:border-slate-700 text-2xl transition-all hover:scale-110 z-50 focus:outline-none">
+        ☀️
+    </button>
+
+    <div class="max-w-5xl mx-auto space-y-10 mt-4">
+        
+        <!-- HEADER KISMI (Yeni Motivasyon Tasarımı) -->
+        <div class="text-center space-y-6 mb-14">
+            
+            <h1 class="text-5xl md:text-6xl font-black tracking-tighter text-red-600 dark:text-red-500 uppercase drop-shadow-sm">
+                AI JOB MATCHER
+            </h1>
+
+            <div class="pt-4">
+                <h2 class="text-3xl md:text-5xl font-extrabold text-slate-900 dark:text-white leading-tight tracking-tight">
+                    Başvuruyorsunuz. Bekliyorsunuz. <br class="hidden md:block">
+                    <span class="highlight-bg px-4 py-1 inline-block mt-3 rounded-lg">Hiç yanıt gelmiyor.</span>
+                </h2>
+            </div>
+            
+            <p class="text-slate-600 dark:text-slate-400 text-lg md:text-xl max-w-3xl mx-auto mt-6 font-medium leading-relaxed">
+                AI Job Matcher CV'nizi analiz eder, yeteneklerinize en uygun işleri bulur ve başvurularınızı yapay zeka ile eşleştirerek uyum oranınızı gösterir. Sadece kazanma ihtimaliniz olan ilanlara odaklanın.
+            </p>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            
+            <!-- 1. ADIM: Profil Oluşturma -->
+            <div class="lg:col-span-5 space-y-6">
+                <div class="glass-card p-6 md:p-8 rounded-2xl shadow-sm border border-red-200 dark:border-red-900/50">
+                    <div class="flex items-center gap-3 mb-6">
+                        <div class="w-8 h-8 rounded-lg bg-red-100 dark:bg-red-600/20 text-red-600 dark:text-red-400 flex items-center justify-center font-bold">1</div>
+                        <h2 class="text-xl font-bold text-slate-800 dark:text-slate-100">Profilini Oluştur</h2>
+                    </div>
+                    
+                    <form id="profileForm" class="space-y-5">
+                        <div>
+                            <label class="block text-sm font-bold text-red-700 dark:text-red-400 mb-1.5">Kullanıcı Adı</label>
+                            <input type="text" id="username" placeholder="Örn: irem" class="w-full border border-red-200 dark:border-red-800/50 bg-red-50/50 dark:bg-slate-800 p-3 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none transition-all dark:text-white" required>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-bold text-red-700 dark:text-red-400 mb-1.5">CV Yükle (PDF)</label>
+                            <label for="cv_file" class="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-red-300 dark:border-red-800 rounded-xl cursor-pointer bg-red-50/30 dark:bg-slate-800 hover:bg-red-50 dark:hover:bg-red-900/20 hover:border-red-500 transition-all group">
+                                <div class="flex flex-col items-center justify-center pt-5 pb-6">
+                                    <svg class="w-8 h-8 mb-3 text-red-400 group-hover:text-red-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+                                    <p class="mb-1 text-sm text-slate-500 dark:text-slate-400" id="fileNameDisplay"><span class="font-bold text-red-600 dark:text-red-400">PDF Seç</span> veya sürükle</p>
+                                </div>
+                                <input id="cv_file" type="file" class="hidden" accept=".pdf" required />
+                            </label>
+                        </div>
+                        
+                        <button type="submit" id="profileBtn" class="w-full bg-slate-900 hover:bg-slate-800 dark:bg-red-600 dark:hover:bg-red-700 text-white font-bold py-3.5 rounded-xl transition-all shadow-md flex justify-center items-center gap-2">
+                            <span>Sisteme Kaydet</span>
+                        </button>
+                    </form>
+                    <div id="profileResult" class="mt-4 hidden p-3 rounded-lg text-sm font-bold text-center"></div>
+                </div>
+            </div>
+
+            <!-- 2. ADIM: İş Arama (TAMAMEN KIRMIZI TEMA) -->
+            <div class="lg:col-span-7 space-y-6">
+                <div class="glass-card p-6 md:p-8 rounded-2xl shadow-sm border border-red-200 dark:border-red-900/50">
+                    <div class="flex items-center gap-3 mb-6">
+                        <div class="w-8 h-8 rounded-lg bg-red-100 dark:bg-red-600/20 text-red-600 dark:text-red-400 flex items-center justify-center font-bold">2</div>
+                        <h2 class="text-xl font-bold text-slate-800 dark:text-slate-100">İlanları Analiz Et</h2>
+                    </div>
+
+                    <form id="matchForm" class="space-y-5">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                            <div class="md:col-span-2">
+                                <label class="block text-sm font-bold text-red-700 dark:text-red-400 mb-1.5">Kayıtlı Kullanıcı Adın</label>
+                                <input type="text" id="match_username" placeholder="Sisteme kaydettiğin ad..." class="w-full border border-red-200 dark:border-red-800/50 bg-red-50/50 dark:bg-slate-800 p-3 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none transition-all dark:text-white" required>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-bold text-red-700 dark:text-red-400 mb-1.5">Pozisyon</label>
+                                <input type="text" id="keyword" placeholder="Örn: Python Developer" class="w-full border border-red-200 dark:border-red-800/50 bg-red-50/50 dark:bg-slate-800 p-3 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none transition-all dark:text-white" required>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-bold text-red-700 dark:text-red-400 mb-1.5">Konum</label>
+                                <!-- Varsayılan "Remote" yazısı kaldırıldı -->
+                                <input type="text" id="location" placeholder="Örn: Ankara, Remote, USA" class="w-full border border-red-200 dark:border-red-800/50 bg-red-50/50 dark:bg-slate-800 p-3 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none transition-all dark:text-white" required>
+                            </div>
+                        </div>
+                        
+                        <button type="submit" id="matchBtn" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3.5 rounded-xl transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 flex justify-center items-center gap-2">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                            <span>Yapay Zeka Analizini Başlat</span>
+                        </button>
+                    </form>
+                    
+                    <!-- Yükleme Animasyonu -->
+                    <div id="matchLoading" class="mt-8 hidden flex-col items-center justify-center space-y-4 py-8">
+                        <div class="relative w-12 h-12">
+                            <div class="absolute inset-0 rounded-full border-4 border-slate-100 dark:border-slate-700"></div>
+                            <div class="absolute inset-0 rounded-full border-4 border-red-600 border-t-transparent animate-spin"></div>
+                        </div>
+                        <div class="text-center">
+                            <p class="text-slate-800 dark:text-slate-200 font-bold">Gemini Yapay Zekası Analiz Ediyor</p>
+                            <p class="text-slate-500 dark:text-slate-400 text-sm animate-pulse mt-1">Özgeçmişin ilanlarla karşılaştırılıyor...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sonuç Alanı -->
+                <div id="matchResult" class="space-y-4"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- GECE / GÜNDÜZ MODU ---
+        const themeToggleBtn = document.getElementById('themeToggle');
+        const html = document.documentElement;
+
+        themeToggleBtn.addEventListener('click', () => {
+            if (html.classList.contains('dark')) {
+                html.classList.remove('dark');
+                themeToggleBtn.innerText = '☀️';
+            } else {
+                html.classList.add('dark');
+                themeToggleBtn.innerText = '🌙';
+            }
+        });
+
+        // --- DOSYA YÜKLEME ---
+        document.getElementById('cv_file').addEventListener('change', function(e) {
+            const fileName = e.target.files[0]?.name || "PDF Seç veya sürükle";
+            document.getElementById('fileNameDisplay').innerHTML = `<span class="font-bold text-red-600 dark:text-red-400">${fileName}</span>`;
+        });
+
+        // --- PROFİL KAYDETME ---
+        document.getElementById('profileForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('profileBtn');
+            const resultDiv = document.getElementById('profileResult');
+            
+            btn.disabled = true;
+            btn.innerHTML = `<svg class="animate-spin h-5 w-5 mr-2 inline" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Kaydediliyor...`;
+            
+            const formData = new FormData();
+            formData.append('username', document.getElementById('username').value);
+            formData.append('cv_file', document.getElementById('cv_file').files[0]);
+
+            try {
+                const res = await fetch('/api/profile', { method: 'POST', body: formData });
+                const data = await res.json();
+                
+                resultDiv.classList.remove('hidden');
+                if(data.error) {
+                    resultDiv.className = "mt-4 p-3 rounded-lg text-sm font-bold text-center bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-200 border border-red-200 dark:border-red-800";
+                    resultDiv.innerText = data.error;
+                } else {
+                    resultDiv.className = "mt-4 p-3 rounded-lg text-sm font-bold text-center bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800";
+                    resultDiv.innerText = data.mesaj;
+                }
+            } catch (err) {
+                resultDiv.classList.remove('hidden');
+                resultDiv.className = "mt-4 p-3 rounded-lg text-sm font-bold bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-200 border border-red-200 dark:border-red-800";
+                resultDiv.innerText = "Bir bağlantı hatası oluştu.";
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = `Sisteme Kaydet`;
+            }
+        });
+
+        // --- İLAN EŞLEŞTİRME ---
+        document.getElementById('matchForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('matchBtn');
+            const loading = document.getElementById('matchLoading');
+            const resultDiv = document.getElementById('matchResult');
+            
+            btn.disabled = true;
+            btn.classList.add('opacity-70');
+            loading.classList.remove('hidden');
+            loading.classList.add('flex');
+            resultDiv.innerHTML = "";
+
+            const formData = new FormData();
+            formData.append('username', document.getElementById('match_username').value);
+            formData.append('keyword', document.getElementById('keyword').value);
+            formData.append('location', document.getElementById('location').value);
+
+            try {
+                const res = await fetch('/api/match', { method: 'POST', body: formData });
+                const data = await res.json();
+
+                if(data.error) {
+                    resultDiv.innerHTML = `<div class="p-4 bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-200 rounded-xl border border-red-200 dark:border-red-800 font-bold">${data.error}</div>`;
+                    return;
+                }
+
+                let html = `<div class="flex items-center justify-between mb-4 px-1"><h3 class="text-xl font-bold text-slate-800 dark:text-slate-100">Analiz Sonuçları</h3><span class="text-sm font-bold bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 px-3 py-1 rounded-full">${data.siralı_ilanlar.length} İlan Bulundu</span></div>`;
+                
+                data.siralı_ilanlar.forEach(ilan => {
+                    let colorTheme = ilan.Eslesme_Orani >= 70 ? { bg: 'bg-emerald-500', text: 'text-emerald-600 dark:text-emerald-400' } : 
+                                     ilan.Eslesme_Orani >= 40 ? { bg: 'bg-amber-400', text: 'text-amber-600 dark:text-amber-400' } : 
+                                     { bg: 'bg-red-500', text: 'text-red-600 dark:text-red-400' };
+                                     
+                    html += `
+                        <div class="glass-card border border-slate-200 dark:border-slate-700 p-6 rounded-2xl hover:border-red-300 dark:hover:border-red-500 transition-all duration-300 relative overflow-hidden group">
+                            <div class="absolute top-0 left-0 h-1 bg-slate-100 dark:bg-slate-800 w-full">
+                                <div class="h-1 ${colorTheme.bg} transition-all duration-1000" style="width: ${ilan.Eslesme_Orani}%"></div>
+                            </div>
+                            
+                            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4 mt-2">
+                                <div>
+                                    <h4 class="text-lg font-bold text-slate-900 dark:text-white group-hover:text-red-600 dark:group-hover:text-red-400 transition-colors">${ilan.Pozisyon}</h4>
+                                    <div class="flex items-center gap-2 text-slate-500 dark:text-slate-400 mt-1">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
+                                        <span class="font-medium">${ilan.Sirket}</span>
+                                    </div>
+                                </div>
+                                <div class="flex flex-col items-end">
+                                    <span class="text-3xl font-black ${colorTheme.text}">%${ilan.Eslesme_Orani}</span>
+                                    <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Uyum</span>
+                                </div>
+                            </div>
+                            
+                            <div class="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 mb-5 border border-slate-100 dark:border-slate-700">
+                                <p class="text-sm text-slate-700 dark:text-slate-300 leading-relaxed"><span class="font-bold text-slate-900 dark:text-white">✨ AI Yorumu:</span> ${ilan.Analiz}</p>
+                            </div>
+                            
+                            <a href="${ilan.Link}" target="_blank" class="inline-flex items-center gap-2 text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 font-bold text-sm group-hover:underline underline-offset-4">
+                                İlan Detayına Git 
+                                <svg class="w-4 h-4 transform group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+                            </a>
+                        </div>
+                    `;
+                });
+                resultDiv.innerHTML = html;
+            } catch (err) {
+                resultDiv.innerHTML = `<div class="p-4 bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-200 rounded-xl border border-red-200 dark:border-red-800 font-bold">Bağlantı hatası oluştu. Lütfen tekrar deneyin.</div>`;
+            } finally {
+                btn.disabled = false;
+                btn.classList.remove('opacity-70');
+                loading.classList.add('hidden');
+                loading.classList.remove('flex');
+            }
+        });
+    </script>
+</body>
+</html>

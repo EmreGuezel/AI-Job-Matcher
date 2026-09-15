@@ -5,3 +5,4 @@ pandas
 requests
 pymupdf
 google-genai
+jinja2
