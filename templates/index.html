@@ -30,6 +30,9 @@
             background-color: rgba(153, 27, 27, 0.4);
             color: #fca5a5;
         }
+        /* Konum açılır listesi: karanlık modda seçenekler okunabilir kalsın
+           (tarayıcı varsayılanı beyaz zeminde beyaz yazı yapabiliyor) */
+        .dark select option { background-color: #1e293b; color: #f1f5f9; }
     </style>
 </head>
 <body class="bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-black min-h-screen p-4 md:p-8 text-slate-800 dark:text-slate-100">
@@ -114,9 +117,11 @@
                                 <input type="text" id="keyword" placeholder="Örn: Python Developer" class="w-full border border-red-200 dark:border-red-800/50 bg-red-50/50 dark:bg-slate-800 p-3 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none transition-all dark:text-white" required>
                             </div>
                             <div>
-                                <label class="block text-sm font-bold text-red-700 dark:text-red-400 mb-1.5">Konum</label>
-                                <!-- Varsayılan "Remote" yazısı kaldırıldı -->
-                                <input type="text" id="location" placeholder="Örn: Ankara, Remote, USA" class="w-full border border-red-200 dark:border-red-800/50 bg-red-50/50 dark:bg-slate-800 p-3 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none transition-all dark:text-white" required>
+                                <label for="locationSelect" class="block text-sm font-bold text-red-700 dark:text-red-400 mb-1.5">Konum</label>
+                                <!-- Seçenekler JS ile doldurulur (COUNTRIES listesi) -->
+                                <select id="locationSelect" class="w-full border border-red-200 dark:border-red-800/50 bg-red-50/50 dark:bg-slate-800 p-3 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none transition-all dark:text-white cursor-pointer" required></select>
+                                <!-- Sadece "Diğer (şehir yaz)" seçilince görünür -->
+                                <input type="text" id="locationOther" placeholder="Örn: Ankara, Berlin, Dubai" class="hidden mt-2 w-full border border-red-200 dark:border-red-800/50 bg-red-50/50 dark:bg-slate-800 p-3 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none transition-all dark:text-white">
                             </div>
                         </div>
                         
@@ -159,6 +164,243 @@
                 themeToggleBtn.innerText = '🌙';
             }
         });
+
+        // --- KONUM LİSTESİ ---
+        // [Türkçe görünen ad, JSearch'e gönderilen ad]
+        // Listede Türkçe ad görünür ama arama motoruna İngilizce ad gider:
+        // Google for Jobs İngilizce ülke adlarını çok daha güvenilir tanıyor.
+        const COUNTRIES = [
+            ["Afganistan", "Afghanistan"],
+            ["Almanya", "Germany"],
+            ["Amerika Birleşik Devletleri", "United States"],
+            ["Andorra", "Andorra"],
+            ["Angola", "Angola"],
+            ["Antigua ve Barbuda", "Antigua and Barbuda"],
+            ["Arjantin", "Argentina"],
+            ["Arnavutluk", "Albania"],
+            ["Avustralya", "Australia"],
+            ["Avusturya", "Austria"],
+            ["Azerbaycan", "Azerbaijan"],
+            ["Bahamalar", "Bahamas"],
+            ["Bahreyn", "Bahrain"],
+            ["Bangladeş", "Bangladesh"],
+            ["Barbados", "Barbados"],
+            ["Belarus", "Belarus"],
+            ["Belçika", "Belgium"],
+            ["Belize", "Belize"],
+            ["Benin", "Benin"],
+            ["Birleşik Arap Emirlikleri", "United Arab Emirates"],
+            ["Birleşik Krallık", "United Kingdom"],
+            ["Bolivya", "Bolivia"],
+            ["Bosna-Hersek", "Bosnia and Herzegovina"],
+            ["Botsvana", "Botswana"],
+            ["Brezilya", "Brazil"],
+            ["Brunei", "Brunei"],
+            ["Bulgaristan", "Bulgaria"],
+            ["Burkina Faso", "Burkina Faso"],
+            ["Burundi", "Burundi"],
+            ["Butan", "Bhutan"],
+            ["Cezayir", "Algeria"],
+            ["Cibuti", "Djibouti"],
+            ["Çad", "Chad"],
+            ["Çekya", "Czechia"],
+            ["Çin", "China"],
+            ["Danimarka", "Denmark"],
+            ["Demokratik Kongo Cumhuriyeti", "Democratic Republic of the Congo"],
+            ["Doğu Timor", "Timor-Leste"],
+            ["Dominik Cumhuriyeti", "Dominican Republic"],
+            ["Dominika", "Dominica"],
+            ["Ekvador", "Ecuador"],
+            ["Ekvator Ginesi", "Equatorial Guinea"],
+            ["El Salvador", "El Salvador"],
+            ["Endonezya", "Indonesia"],
+            ["Eritre", "Eritrea"],
+            ["Ermenistan", "Armenia"],
+            ["Estonya", "Estonia"],
+            ["Esvatini", "Eswatini"],
+            ["Etiyopya", "Ethiopia"],
+            ["Fas", "Morocco"],
+            ["Fiji", "Fiji"],
+            ["Fildişi Sahili", "Ivory Coast"],
+            ["Filipinler", "Philippines"],
+            ["Filistin", "Palestine"],
+            ["Finlandiya", "Finland"],
+            ["Fransa", "France"],
+            ["Gabon", "Gabon"],
+            ["Gambiya", "Gambia"],
+            ["Gana", "Ghana"],
+            ["Gine", "Guinea"],
+            ["Gine-Bissau", "Guinea-Bissau"],
+            ["Grenada", "Grenada"],
+            ["Guatemala", "Guatemala"],
+            ["Guyana", "Guyana"],
+            ["Güney Afrika", "South Africa"],
+            ["Güney Kore", "South Korea"],
+            ["Güney Sudan", "South Sudan"],
+            ["Gürcistan", "Georgia"],
+            ["Haiti", "Haiti"],
+            ["Hindistan", "India"],
+            ["Hırvatistan", "Croatia"],
+            ["Hollanda", "Netherlands"],
+            ["Honduras", "Honduras"],
+            ["Irak", "Iraq"],
+            ["İran", "Iran"],
+            ["İrlanda", "Ireland"],
+            ["İspanya", "Spain"],
+            ["İsrail", "Israel"],
+            ["İsveç", "Sweden"],
+            ["İsviçre", "Switzerland"],
+            ["İtalya", "Italy"],
+            ["İzlanda", "Iceland"],
+            ["Jamaika", "Jamaica"],
+            ["Japonya", "Japan"],
+            ["Kamboçya", "Cambodia"],
+            ["Kamerun", "Cameroon"],
+            ["Kanada", "Canada"],
+            ["Karadağ", "Montenegro"],
+            ["Katar", "Qatar"],
+            ["Kazakistan", "Kazakhstan"],
+            ["Kenya", "Kenya"],
+            ["Kıbrıs", "Cyprus"],
+            ["Kırgızistan", "Kyrgyzstan"],
+            ["Kiribati", "Kiribati"],
+            ["Kolombiya", "Colombia"],
+            ["Komorlar", "Comoros"],
+            ["Kongo Cumhuriyeti", "Republic of the Congo"],
+            ["Kosova", "Kosovo"],
+            ["Kosta Rika", "Costa Rica"],
+            ["Kuveyt", "Kuwait"],
+            ["Kuzey Kore", "North Korea"],
+            ["Kuzey Makedonya", "North Macedonia"],
+            ["Küba", "Cuba"],
+            ["Laos", "Laos"],
+            ["Lesotho", "Lesotho"],
+            ["Letonya", "Latvia"],
+            ["Liberya", "Liberia"],
+            ["Libya", "Libya"],
+            ["Lihtenştayn", "Liechtenstein"],
+            ["Litvanya", "Lithuania"],
+            ["Lübnan", "Lebanon"],
+            ["Lüksemburg", "Luxembourg"],
+            ["Macaristan", "Hungary"],
+            ["Madagaskar", "Madagascar"],
+            ["Malavi", "Malawi"],
+            ["Maldivler", "Maldives"],
+            ["Malezya", "Malaysia"],
+            ["Mali", "Mali"],
+            ["Malta", "Malta"],
+            ["Marshall Adaları", "Marshall Islands"],
+            ["Mauritius", "Mauritius"],
+            ["Meksika", "Mexico"],
+            ["Mısır", "Egypt"],
+            ["Mikronezya", "Micronesia"],
+            ["Moğolistan", "Mongolia"],
+            ["Moldova", "Moldova"],
+            ["Monako", "Monaco"],
+            ["Moritanya", "Mauritania"],
+            ["Mozambik", "Mozambique"],
+            ["Myanmar", "Myanmar"],
+            ["Namibya", "Namibia"],
+            ["Nauru", "Nauru"],
+            ["Nepal", "Nepal"],
+            ["Nijer", "Niger"],
+            ["Nijerya", "Nigeria"],
+            ["Nikaragua", "Nicaragua"],
+            ["Norveç", "Norway"],
+            ["Orta Afrika Cumhuriyeti", "Central African Republic"],
+            ["Özbekistan", "Uzbekistan"],
+            ["Pakistan", "Pakistan"],
+            ["Palau", "Palau"],
+            ["Panama", "Panama"],
+            ["Papua Yeni Gine", "Papua New Guinea"],
+            ["Paraguay", "Paraguay"],
+            ["Peru", "Peru"],
+            ["Polonya", "Poland"],
+            ["Portekiz", "Portugal"],
+            ["Romanya", "Romania"],
+            ["Ruanda", "Rwanda"],
+            ["Rusya", "Russia"],
+            ["Saint Kitts ve Nevis", "Saint Kitts and Nevis"],
+            ["Saint Lucia", "Saint Lucia"],
+            ["Saint Vincent ve Grenadinler", "Saint Vincent and the Grenadines"],
+            ["Samoa", "Samoa"],
+            ["San Marino", "San Marino"],
+            ["São Tomé ve Príncipe", "Sao Tome and Principe"],
+            ["Senegal", "Senegal"],
+            ["Seyşeller", "Seychelles"],
+            ["Sırbistan", "Serbia"],
+            ["Sierra Leone", "Sierra Leone"],
+            ["Singapur", "Singapore"],
+            ["Slovakya", "Slovakia"],
+            ["Slovenya", "Slovenia"],
+            ["Solomon Adaları", "Solomon Islands"],
+            ["Somali", "Somalia"],
+            ["Sri Lanka", "Sri Lanka"],
+            ["Sudan", "Sudan"],
+            ["Surinam", "Suriname"],
+            ["Suriye", "Syria"],
+            ["Suudi Arabistan", "Saudi Arabia"],
+            ["Şili", "Chile"],
+            ["Tacikistan", "Tajikistan"],
+            ["Tanzanya", "Tanzania"],
+            ["Tayland", "Thailand"],
+            ["Tayvan", "Taiwan"],
+            ["Togo", "Togo"],
+            ["Tonga", "Tonga"],
+            ["Trinidad ve Tobago", "Trinidad and Tobago"],
+            ["Tunus", "Tunisia"],
+            ["Türkiye", "Turkey"],
+            ["Türkmenistan", "Turkmenistan"],
+            ["Tuvalu", "Tuvalu"],
+            ["Uganda", "Uganda"],
+            ["Ukrayna", "Ukraine"],
+            ["Umman", "Oman"],
+            ["Ürdün", "Jordan"],
+            ["Uruguay", "Uruguay"],
+            ["Vanuatu", "Vanuatu"],
+            ["Vatikan", "Vatican City"],
+            ["Venezuela", "Venezuela"],
+            ["Vietnam", "Vietnam"],
+            ["Yemen", "Yemen"],
+            ["Yeni Zelanda", "New Zealand"],
+            ["Yeşil Burun Adaları", "Cape Verde"],
+            ["Yunanistan", "Greece"],
+            ["Zambiya", "Zambia"],
+            ["Zimbabve", "Zimbabwe"]
+        ];
+
+        const OTHER_VALUE = "__other__";
+        const locationSelect = document.getElementById('locationSelect');
+        const locationOther = document.getElementById('locationOther');
+
+        // Listeyi Türkçe alfabeye göre sıralayıp doldur
+        function fillLocationOptions() {
+            locationSelect.appendChild(new Option('— Konum Seç —', ''));
+            locationSelect.appendChild(new Option('🌍 Uzaktan / Remote', 'Remote'));
+
+            [...COUNTRIES]
+                .sort((a, b) => a[0].localeCompare(b[0], 'tr'))
+                .forEach(([tr, en]) => locationSelect.appendChild(new Option(tr, en)));
+
+            locationSelect.appendChild(new Option('✏️ Diğer (şehir yaz)', OTHER_VALUE));
+        }
+
+        // "Diğer" seçilirse serbest metin kutusunu aç ve zorunlu yap
+        locationSelect.addEventListener('change', () => {
+            const isOther = locationSelect.value === OTHER_VALUE;
+            locationOther.classList.toggle('hidden', !isOther);
+            locationOther.required = isOther;
+            if (isOther) locationOther.focus();
+        });
+
+        // Forma gönderilecek gerçek konum değeri
+        function getLocationValue() {
+            return locationSelect.value === OTHER_VALUE
+                ? locationOther.value.trim()
+                : locationSelect.value;
+        }
+
+        fillLocationOptions();
 
         // --- DOSYA YÜKLEME ---
         document.getElementById('cv_file').addEventListener('change', function(e) {
@@ -217,7 +459,7 @@
             const formData = new FormData();
             formData.append('username', document.getElementById('match_username').value);
             formData.append('keyword', document.getElementById('keyword').value);
-            formData.append('location', document.getElementById('location').value);
+            formData.append('location', getLocationValue());
 
             try {
                 const res = await fetch('/api/match', { method: 'POST', body: formData });
