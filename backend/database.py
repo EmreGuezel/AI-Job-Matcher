@@ -1,20 +1,14 @@
 import sqlite3
-import os
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DB_PATH = os.path.join(BASE_DIR, "data", "jobs.db")
+# Vercel'in yazmaya izin verdiği tek geçici klasör
+DB_PATH = "/tmp/jobs.db"
 
 def get_db_connection():
-    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
-    return conn
-
-def init_db():
-    conn = get_db_connection()
-    cursor = conn.cursor()
     
-    # Kullanıcı Profilleri Tablosu
+    # Vercel'de geçici bellek silinirse diye tabloları her bağlantıda kontrol et
+    cursor = conn.cursor()
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -22,8 +16,6 @@ def init_db():
             cv_text TEXT
         )
     ''')
-    
-    # Yapay Zeka Eşleşme Analizleri Tablosu
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS matches (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -35,10 +27,6 @@ def init_db():
             FOREIGN KEY(user_id) REFERENCES users(id)
         )
     ''')
-    
     conn.commit()
-    conn.close()
-    print("Kullanıcı veritabanı başarıyla oluşturuldu ve hazır.")
-
-if __name__ == "__main__":
-    init_db()
+    
+    return conn

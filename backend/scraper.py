@@ -47,15 +47,13 @@ def scrape_jobs(keyword="python developer", location="USA"):
             return f"Uyarı: '{keyword} in {location}' araması için şu an aktif ilan bulunamadı."
             
         df = pd.DataFrame(jobs_data)
-        BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        DATA_DIR = os.path.join(BASE_DIR, "data")
-        os.makedirs(DATA_DIR, exist_ok=True)
         
-        file_path = os.path.join(DATA_DIR, "jobs.csv")
+        # Vercel için /tmp yolu
+        file_path = "/tmp/jobs.csv"
         df.to_csv(file_path, index=False, encoding='utf-8-sig', sep=';')
         
         return f"BAŞARILI: {len(jobs_data)} adet gerçek ilan kaydedildi."
-        
+
     except Exception as e:
         return f"Kazıma hatası: {str(e)}"
 

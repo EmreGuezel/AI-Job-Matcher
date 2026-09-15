@@ -1,3 +1,5 @@
+from ast import keyword
+
 from fastapi import FastAPI, Form, UploadFile, File
 from fastapi.responses import HTMLResponse
 import pandas as pd
@@ -152,7 +154,7 @@ def create_profile(
     cv_file: UploadFile = File(...)
 ):
     BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    temp_pdf_path = os.path.join(BASE_DIR, "data", f"{username}_temp.pdf")
+    temp_pdf_path = f"/tmp/{username}_temp.pdf"
     
     with open(temp_pdf_path, "wb") as buffer:
         shutil.copyfileobj(cv_file.file, buffer)
@@ -186,8 +188,8 @@ def match_and_sort(
     cv_text = user["cv_text"]
     scrape_jobs(keyword, location)
     
-    BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    csv_path = os.path.join(BASE_DIR, "data", "jobs.csv")
+    # BASE_DIR ve csv_path satırlarını silip şunları ekle:
+    csv_path = "/tmp/jobs.csv"
     
     if not os.path.exists(csv_path):
         return {"error": "İlanlar çekilemedi."}
