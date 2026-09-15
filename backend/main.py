@@ -4,7 +4,7 @@ import pandas as pd
 import os
 import shutil
 from backend.scraper import scrape_jobs
-from backend.ai_matcher import analyze_match, extract_text
+from backend.ai_matcher import analyze_matches, extract_text
 from backend.database import get_db_connection
 
 app = FastAPI(title="AI Job Matcher", description="Kişiselleştirilmiş İş Eşleştirme Motoru")
@@ -33,6 +33,13 @@ def create_profile(
 
     if os.path.exists(temp_pdf_path):
         os.remove(temp_pdf_path)
+
+    # extract_text hata durumunda exception atmak yerine "Hata: ..." döner.
+    # Eskiden bu metin olduğu gibi CV olarak kaydediliyordu ve tüm ilanlar
+    # sessizce %0 alıyordu — burada erkenden durduruyoruz.
+    if cv_text.startswith("Hata:") or len(cv_text.strip()) < 50:
+        return {"error": "CV okunamadı. PDF'in metin içerdiğinden emin ol "
+                         "(taranmış/görüntü PDF'ler okunamaz)."}
 
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -63,26 +70,30 @@ def match_and_sort(
     if not os.path.exists(csv_path):
         return {"error": "İlanlar çekilemedi."}
 
-    df = pd.read_csv(csv_path, sep=';', encoding='utf-8-sig')
+    # fillna: eksik alanlar NaN gelirse eşleştirme motoru string bekliyor
+    df = pd.read_csv(csv_path, sep=';', encoding='utf-8-sig').fillna('')
+    jobs = df.to_dict('records')
+
+    # Tüm ilanlar TEK SEFERDE puanlanır: IDF tüm korpus üzerinden hesaplandığı
+    # için ilan başına ayrı çağrı yapılırsa skorlar anlamsızlaşır.
+    scored = analyze_matches(cv_text, jobs)
 
     results = []
-    for index, row in df.iterrows():
-        job_desc = f"Pozisyon: {row['Pozisyon']}, Şirket: {row['Şirket']}, Deneyim: {row['Deneyim_Seviyesi']}"
-        ai_result = analyze_match(cv_text, job_desc)
-
+    for row, ai_result in zip(jobs, scored):
         match_data = {
-            "Sirket": row['Şirket'],
-            "Pozisyon": row['Pozisyon'],
+            "Sirket": row.get('Şirket', ''),
+            "Pozisyon": row.get('Pozisyon', ''),
             "Eslesme_Orani": ai_result.get("percentage", 0),
             "Analiz": ai_result.get("analysis", "Analiz yapılamadı"),
-            "Link": row['Link']
+            "Link": row.get('Link', '')
         }
         results.append(match_data)
 
         cursor.execute('''
             INSERT INTO matches (user_id, job_title, company, match_percentage, analysis_text)
             VALUES (?, ?, ?, ?, ?)
-        ''', (user["id"], row['Pozisyon'], row['Şirket'], match_data["Eslesme_Orani"], match_data["Analiz"]))
+        ''', (user["id"], match_data["Pozisyon"], match_data["Sirket"],
+              match_data["Eslesme_Orani"], match_data["Analiz"]))
 
     conn.commit()
     conn.close()

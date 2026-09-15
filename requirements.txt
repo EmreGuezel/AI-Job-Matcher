@@ -4,5 +4,4 @@ python-multipart
 pandas
 requests
 pymupdf
-google-genai
 jinja2
