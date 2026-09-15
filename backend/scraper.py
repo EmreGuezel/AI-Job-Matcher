@@ -14,9 +14,12 @@ isabetini JSearch'e göre düşürür.
 import html
 import os
 import re
+import time
 
 import pandas as pd
 import requests
+from requests.exceptions import ConnectionError as RequestsConnectionError
+from requests.exceptions import Timeout
 
 from backend.ai_matcher import _fold
 from backend.experience import classify
@@ -27,6 +30,21 @@ JOB_LIMIT = 25
 
 # Açıklamalar ~5.000 karakter geliyor. CSV şişmesin diye kırpıyoruz.
 DESCRIPTION_LIMIT = 4000
+
+# Ağ ayarları.
+#
+# Ölçülen gerçek gecikmeler (JSearch, search-v2): 2.7 / 4.8 / 18.9 / 30.3 sn.
+# Yani servis YAVAŞ ama çoğu zaman başarılı. Bu yüzden:
+#   * okuma süresi gözlemlenen en kötü değerin (30 sn) üstünde olmalı —
+#     daha kısası yavaş ama BAŞARILI istekleri keser.
+#   * toplam süre bir bütçeyle sınırlanır ki tekrar deneme sunucu tarafı
+#     fonksiyon limitini aşmasın (eskiden tek deneme 60 sn'ydi).
+# İkisi de ortam değişkeniyle ayarlanabilir.
+CONNECT_TIMEOUT = 10
+READ_TIMEOUT = int(os.getenv("SCRAPE_READ_TIMEOUT", "45"))
+REQUEST_DEADLINE = float(os.getenv("SCRAPE_DEADLINE", "75"))
+REQUEST_RETRIES = 1
+RETRY_BACKOFF = 2
 
 CSV_PATH = "/tmp/jobs.csv"
 
@@ -63,15 +81,15 @@ def _clean_snippet(raw):
     Jooble HTML parçaları gönderiyor — <b> vurguları, &nbsp; varlıkları,
     NBSP ve \\r\\n karışımı. Snippet zaten ~300 karakter olduğu için bu
     gürültü eşleştirmeyi ciddi biçimde bozuyor.
-
-    Not: Türkçe karakterler kaynakta bozulup U+FFFD'ye (�) dönüşmüş
-    olabiliyor. Bu kayıp geri getirilemez, sadece temizlenir.
     """
     if not raw:
         return ""
     text = html.unescape(raw)            # &nbsp; -> \xa0, &amp; -> &
     text = _HTML_TAG_RE.sub(" ", text)   # <b>, </b>, <br/> ...
-    text = text.replace("�", " ")   # kaynakta kaybolmuş karakterler
+    # Kaynakta gerçekten kaybolmuş karakter (U+FFFD) varsa temizle. Not:
+    # konsolda görülen "�" genellikle bu DEĞİLDİR — Windows terminalinin
+    # Türkçe karakterleri (ü, ı) çizememesidir; veri sağlamdır.
+    text = text.replace("�", " ")
     text = text.replace("\xa0", " ")     # NBSP
     text = re.sub(r"\s+", " ", text)
     return text.strip()
@@ -94,6 +112,86 @@ def _row(title, company, city, link, description):
     }
 
 
+def _http_error_message(status, source):
+    """HTTP durum kodunu kullanıcının anlayacağı bir cümleye çevirir."""
+    if status in (401, 403):
+        return (f"{source} API anahtarını reddetti ({status}). "
+                f"Anahtar geçersiz ya da süresi dolmuş.")
+    if status == 429:
+        return (f"{source} istek kotası doldu ({status}). "
+                f"Ücretsiz plan limiti bitti — bir süre sonra tekrar dene.")
+    if status >= 500:
+        return (f"{source} şu anda hata veriyor ({status}). "
+                f"Bu geçici bir sorun, birazdan tekrar dene.")
+    return f"{source} beklenmeyen bir yanıt döndü ({status})."
+
+
+def _connection_error_message(source, exc):
+    """Zaman aşımı ile bağlantı hatası kullanıcı için farklı şeyler söyler.
+
+    İkisi de aynı çağrıda yakalanıyor ama "yanıt vermedi" demek DNS hatası
+    için yanlış olurdu.
+    """
+    if exc is None or isinstance(exc, Timeout):
+        # Toplam bütçeyi bildir: tek denemenin okuma süresi bütçe daralınca
+        # kısaltılıyor, sabit bir sayı yazmak yanıltıcı olurdu.
+        return (f"{source} zamanında yanıt vermedi ({REQUEST_DEADLINE:.0f} sn). "
+                f"Servis geçici olarak yavaş olabilir — birazdan tekrar dene.")
+    return (f"{source} sunucusuna bağlanılamadı. İnternet bağlantını "
+            f"kontrol edip tekrar dene.")
+
+
+def _request(method, url, source, **kwargs):
+    """requests çağrılarını sarmalar: tekrar deneme + anlaşılır hata.
+
+    Eskiden çağrılar çıplak yapılıyordu; zaman aşımında kullanıcı arayüzde
+    urllib3'ün ham metnini görüyordu:
+
+        HTTPSConnectionPool(host='jsearch.p.rapidapi.com', port=443):
+        Read timed out. (read timeout=60)
+
+    Bu mesaj kullanıcıya hiçbir şey söylemiyor. Artık geçici ağ hatalarında
+    bir kez daha denenir, kalıcı hatalarda (401/403/429/5xx) doğrudan
+    anlaşılır bir RuntimeError atılır.
+    """
+    deadline = time.monotonic() + REQUEST_DEADLINE
+    last_error = None
+
+    for attempt in range(REQUEST_RETRIES + 1):
+        # Bütçe bittiyse yeni deneme başlatma — tekrar deneme toplam süreyi
+        # sunucu limitinin üstüne çıkarmasın.
+        remaining = deadline - time.monotonic()
+        if remaining <= 1:
+            break
+
+        try:
+            response = method(
+                url,
+                timeout=(CONNECT_TIMEOUT, min(READ_TIMEOUT, remaining)),
+                **kwargs,
+            )
+        except requests.RequestException as exc:
+            last_error = exc
+            # Zaman aşımı ve bağlantı sorunları geçici olabilir, bir kez daha
+            # denenir. (requests'te SSLError ve ProxyError da ConnectionError
+            # alt sınıfı olduğu için onlar da bir kez denenir — zararsız.)
+            # Geçersiz URL gibi hatalar bu sınıfa girmez, tekrar denenmez.
+            if not isinstance(exc, (Timeout, RequestsConnectionError)):
+                raise RuntimeError(_connection_error_message(source, exc)) from exc
+            # Tekrar denemek için yeterli bütçe kaldı mı?
+            if (attempt < REQUEST_RETRIES
+                    and deadline - time.monotonic() > RETRY_BACKOFF + 5):
+                time.sleep(RETRY_BACKOFF)
+                continue
+        else:
+            # Yanıt geldi. HTTP hatası kalıcıysa tekrar denemek anlamsız.
+            if response.status_code >= 400:
+                raise RuntimeError(_http_error_message(response.status_code, source))
+            return response
+
+    raise RuntimeError(_connection_error_message(source, last_error)) from last_error
+
+
 def _scrape_jsearch(keyword, location, level):
     headers = {
         "X-RapidAPI-Key": "2ee9113eecmsh332153baca499f6p1fd4bcjsn09813801b13c",
@@ -105,8 +203,7 @@ def _scrape_jsearch(keyword, location, level):
     if level == "Internship":
         params["employment_types"] = "INTERN"
 
-    response = requests.get(JSEARCH_URL, headers=headers, params=params, timeout=60)
-    response.raise_for_status()
+    response = _request(requests.get, JSEARCH_URL, "JSearch", headers=headers, params=params)
     job_list = (response.json().get("data") or {}).get("jobs") or []
 
     rows = []
@@ -130,12 +227,12 @@ def _scrape_jooble(keyword, location, level):
             "ortam değişkeni olarak eklemelisin."
         )
 
-    response = requests.post(
+    response = _request(
+        requests.post,
         f"{JOOBLE_API_BASE}/{api_key}",
+        "Jooble",
         json={"keywords": keyword, "location": location, "page": "1"},
-        timeout=60,
     )
-    response.raise_for_status()
     job_list = response.json().get("jobs") or []
 
     rows = []
@@ -171,7 +268,20 @@ def scrape_jobs(keyword="python developer", location="USA", level="all"):
         source = "JSearch"
 
     if not rows:
-        raise RuntimeError(f"'{keyword} / {location}' için aktif ilan bulunamadı.")
+        # Kapsam gerçeği: JSearch çoğu ülkede ilan indekslemiyor. Ölçüldü:
+        # "python developer" + Germany/Berlin → 0 ilan. Kullanıcıya bunun bir
+        # hata değil kapsam sınırı olduğunu söylemek gerekiyor.
+        if source == "JSearch":
+            raise RuntimeError(
+                f"'{keyword} / {location}' için ilan bulunamadı. JSearch "
+                f"ağırlıklı olarak ABD, Kanada, İngiltere, Avustralya ve "
+                f"Hindistan'ı kapsıyor — seçtiğin ülkede kapsam zayıf olabilir. "
+                f"Farklı bir konum ya da İngilizce anahtar kelime dene."
+            )
+        raise RuntimeError(
+            f"'{keyword} / {location}' için ilan bulunamadı. "
+            f"Farklı bir anahtar kelime dene."
+        )
 
     pd.DataFrame(rows).to_csv(CSV_PATH, index=False, encoding="utf-8-sig", sep=";")
     return f"{len(rows)} ilan bulundu ({source})"
