@@ -112,7 +112,7 @@
                                 <label class="block text-sm font-bold text-red-700 dark:text-red-400 mb-1.5">Kayıtlı Kullanıcı Adın</label>
                                 <input type="text" id="match_username" placeholder="Sisteme kaydettiğin ad..." class="w-full border border-red-200 dark:border-red-800/50 bg-red-50/50 dark:bg-slate-800 p-3 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none transition-all dark:text-white" required>
                             </div>
-                            <div>
+                            <div class="md:col-span-2">
                                 <label class="block text-sm font-bold text-red-700 dark:text-red-400 mb-1.5">Pozisyon</label>
                                 <input type="text" id="keyword" placeholder="Örn: Python Developer" class="w-full border border-red-200 dark:border-red-800/50 bg-red-50/50 dark:bg-slate-800 p-3 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none transition-all dark:text-white" required>
                             </div>
@@ -122,6 +122,18 @@
                                 <select id="locationSelect" class="w-full border border-red-200 dark:border-red-800/50 bg-red-50/50 dark:bg-slate-800 p-3 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none transition-all dark:text-white cursor-pointer" required></select>
                                 <!-- Sadece "Diğer (şehir yaz)" seçilince görünür -->
                                 <input type="text" id="locationOther" placeholder="Örn: Ankara, Berlin, Dubai" class="hidden mt-2 w-full border border-red-200 dark:border-red-800/50 bg-red-50/50 dark:bg-slate-800 p-3 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none transition-all dark:text-white">
+                            </div>
+                            <div>
+                                <label for="levelSelect" class="block text-sm font-bold text-red-700 dark:text-red-400 mb-1.5">Deneyim Seviyesi</label>
+                                <select id="levelSelect" class="w-full border border-red-200 dark:border-red-800/50 bg-red-50/50 dark:bg-slate-800 p-3 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none transition-all dark:text-white cursor-pointer">
+                                    <option value="all">Tüm Seviyeler</option>
+                                    <option value="Internship">Staj / Internship</option>
+                                    <option value="Entry Level">Giriş Seviyesi / Entry Level</option>
+                                    <option value="Associate">Associate</option>
+                                    <option value="Mid-Senior Level">Mid-Senior Level</option>
+                                    <option value="Director">Direktör / Director</option>
+                                    <option value="Executive">Üst Yönetim / Executive</option>
+                                </select>
                             </div>
                         </div>
                         
@@ -369,18 +381,46 @@
             ["Zimbabve", "Zimbabwe"]
         ];
 
+        // Türkiye'nin 81 ili. Bu iller Jooble kaynağına yönlendirilir
+        // (JSearch'te Türkiye kapsamı yok — İstanbul/Ankara/İzmir 0 ilan döner).
+        const TURKISH_PROVINCES = [
+            "Adana", "Adıyaman", "Afyonkarahisar", "Ağrı", "Aksaray", "Amasya",
+            "Ankara", "Antalya", "Ardahan", "Artvin", "Aydın", "Balıkesir",
+            "Bartın", "Batman", "Bayburt", "Bilecik", "Bingöl", "Bitlis", "Bolu",
+            "Burdur", "Bursa", "Çanakkale", "Çankırı", "Çorum", "Denizli",
+            "Diyarbakır", "Düzce", "Edirne", "Elazığ", "Erzincan", "Erzurum",
+            "Eskişehir", "Gaziantep", "Giresun", "Gümüşhane", "Hakkâri", "Hatay",
+            "Iğdır", "Isparta", "İstanbul", "İzmir", "Kahramanmaraş", "Karabük",
+            "Karaman", "Kars", "Kastamonu", "Kayseri", "Kırıkkale", "Kırklareli",
+            "Kırşehir", "Kilis", "Kocaeli", "Konya", "Kütahya", "Malatya",
+            "Manisa", "Mardin", "Mersin", "Muğla", "Muş", "Nevşehir", "Niğde",
+            "Ordu", "Osmaniye", "Rize", "Sakarya", "Samsun", "Siirt", "Sinop",
+            "Sivas", "Şanlıurfa", "Şırnak", "Tekirdağ", "Tokat", "Trabzon",
+            "Tunceli", "Uşak", "Van", "Yalova", "Yozgat", "Zonguldak"
+        ];
+
         const OTHER_VALUE = "__other__";
         const locationSelect = document.getElementById('locationSelect');
         const locationOther = document.getElementById('locationOther');
 
-        // Listeyi Türkçe alfabeye göre sıralayıp doldur
+        // Türkçe alfabeye göre sıralayıp gruplu doldur
         function fillLocationOptions() {
             locationSelect.appendChild(new Option('— Konum Seç —', ''));
             locationSelect.appendChild(new Option('🌍 Uzaktan / Remote', 'Remote'));
 
+            const trGroup = document.createElement('optgroup');
+            trGroup.label = '🇹🇷 Türkiye (81 il)';
+            [...TURKISH_PROVINCES]
+                .sort((a, b) => a.localeCompare(b, 'tr'))
+                .forEach(city => trGroup.appendChild(new Option(city, city)));
+            locationSelect.appendChild(trGroup);
+
+            const worldGroup = document.createElement('optgroup');
+            worldGroup.label = '🌍 Diğer Ülkeler';
             [...COUNTRIES]
                 .sort((a, b) => a[0].localeCompare(b[0], 'tr'))
-                .forEach(([tr, en]) => locationSelect.appendChild(new Option(tr, en)));
+                .forEach(([tr, en]) => worldGroup.appendChild(new Option(tr, en)));
+            locationSelect.appendChild(worldGroup);
 
             locationSelect.appendChild(new Option('✏️ Diğer (şehir yaz)', OTHER_VALUE));
         }
@@ -460,6 +500,7 @@
             formData.append('username', document.getElementById('match_username').value);
             formData.append('keyword', document.getElementById('keyword').value);
             formData.append('location', getLocationValue());
+            formData.append('level', document.getElementById('levelSelect').value);
 
             try {
                 const res = await fetch('/api/match', { method: 'POST', body: formData });
@@ -470,7 +511,15 @@
                     return;
                 }
 
-                let html = `<div class="flex items-center justify-between mb-4 px-1"><h3 class="text-xl font-bold text-slate-800 dark:text-slate-100">Analiz Sonuçları</h3><span class="text-sm font-bold bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 px-3 py-1 rounded-full">${data.siralı_ilanlar.length} İlan Bulundu</span></div>`;
+                const bilgi = data.bilgi ? `<span class="text-xs text-slate-500 dark:text-slate-400 ml-2">(${data.bilgi})</span>` : '';
+
+                // Seviye süzgeci uygulandıysa "3 / 25" gibi göster — kaç ilanın
+                // süzüldüğü görünsün, yoksa "az ilan var" gibi görünüyor.
+                const bulunan = data.siralı_ilanlar.length;
+                const toplam = data.toplam_bulunan || bulunan;
+                const sayi = toplam > bulunan ? `${bulunan} / ${toplam}` : `${bulunan}`;
+
+                let html = `<div class="flex items-center justify-between mb-4 px-1"><h3 class="text-xl font-bold text-slate-800 dark:text-slate-100">Analiz Sonuçları${bilgi}</h3><span class="text-sm font-bold bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 px-3 py-1 rounded-full">${sayi} İlan Bulundu</span></div>`;
                 
                 data.siralı_ilanlar.forEach(ilan => {
                     let colorTheme = ilan.Eslesme_Orani >= 70 ? { bg: 'bg-emerald-500', text: 'text-emerald-600 dark:text-emerald-400' } : 
@@ -486,9 +535,13 @@
                             <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4 mt-2">
                                 <div>
                                     <h4 class="text-lg font-bold text-slate-900 dark:text-white group-hover:text-red-600 dark:group-hover:text-red-400 transition-colors">${ilan.Pozisyon}</h4>
-                                    <div class="flex items-center gap-2 text-slate-500 dark:text-slate-400 mt-1">
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
-                                        <span class="font-medium">${ilan.Sirket}</span>
+                                    <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-slate-500 dark:text-slate-400 mt-1">
+                                        <span class="flex items-center gap-2">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
+                                            <span class="font-medium">${ilan.Sirket}</span>
+                                        </span>
+                                        ${ilan.Sehir ? `<span class="text-xs">📍 ${ilan.Sehir}</span>` : ''}
+                                        <span class="text-xs font-bold bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 px-2 py-0.5 rounded-full">${ilan.Seviye}</span>
                                     </div>
                                 </div>
                                 <div class="flex flex-col items-end">

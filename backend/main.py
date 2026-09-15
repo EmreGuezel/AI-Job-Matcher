@@ -3,7 +3,7 @@ from fastapi.templating import Jinja2Templates
 import pandas as pd
 import os
 import shutil
-from backend.scraper import scrape_jobs
+from backend.scraper import CSV_PATH, scrape_jobs
 from backend.ai_matcher import analyze_matches, extract_text
 from backend.database import get_db_connection
 
@@ -53,7 +53,8 @@ def create_profile(
 def match_and_sort(
     username: str = Form(...),
     keyword: str = Form(...),
-    location: str = Form(...)
+    location: str = Form(...),
+    level: str = Form("all")
 ):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -63,9 +64,17 @@ def match_and_sort(
         return {"error": "Kullanıcı bulunamadı. Lütfen önce yukarıdan profil oluşturun."}
 
     cv_text = user["cv_text"]
-    scrape_jobs(keyword, location)
 
-    csv_path = "/tmp/jobs.csv"
+    # Kazıma başarısız olursa burada dur — aksi halde /tmp'de duran ÖNCEKİ
+    # aramanın CSV'si sessizce yeniden puanlanırdı.
+    try:
+        scrape_info = scrape_jobs(keyword, location, level)
+    except Exception as e:
+        return {"error": str(e)}
+
+    # Yolu scraper'dan al — iki yerde ayrı yazılırsa biri değişince
+    # okuma sessizce eski dosyaya bakar.
+    csv_path = CSV_PATH
 
     if not os.path.exists(csv_path):
         return {"error": "İlanlar çekilemedi."}
@@ -73,6 +82,17 @@ def match_and_sort(
     # fillna: eksik alanlar NaN gelirse eşleştirme motoru string bekliyor
     df = pd.read_csv(csv_path, sep=';', encoding='utf-8-sig').fillna('')
     jobs = df.to_dict('records')
+
+    # Seviye süzgeci burada uygulanır (kaynak filtreleri güvenilmez olduğu için
+    # seviye başlık/açıklamadan tahmin ediliyor — bkz. experience.py)
+    total_found = len(jobs)
+    if level and level != "all":
+        jobs = [j for j in jobs if j.get("Deneyim_Seviyesi") == level]
+        if not jobs:
+            return {"error": f"{total_found} ilan bulundu ama hiçbiri "
+                             f"'{level}' seviyesiyle eşleşmedi. "
+                             f"Seviye tahmini ilan başlığına dayanıyor — "
+                             f"'Tüm Seviyeler' seçeneğini deneyin."}
 
     # Tüm ilanlar TEK SEFERDE puanlanır: IDF tüm korpus üzerinden hesaplandığı
     # için ilan başına ayrı çağrı yapılırsa skorlar anlamsızlaşır.
@@ -83,6 +103,8 @@ def match_and_sort(
         match_data = {
             "Sirket": row.get('Şirket', ''),
             "Pozisyon": row.get('Pozisyon', ''),
+            "Sehir": row.get('Şehir', ''),
+            "Seviye": row.get('Deneyim_Seviyesi', '') or "Belirsiz",
             "Eslesme_Orani": ai_result.get("percentage", 0),
             "Analiz": ai_result.get("analysis", "Analiz yapılamadı"),
             "Link": row.get('Link', '')
@@ -99,4 +121,9 @@ def match_and_sort(
     conn.close()
 
     sorted_results = sorted(results, key=lambda x: x["Eslesme_Orani"], reverse=True)
-    return {"kullanici": username, "siralı_ilanlar": sorted_results}
+    return {
+        "kullanici": username,
+        "siralı_ilanlar": sorted_results,
+        "bilgi": scrape_info,
+        "toplam_bulunan": total_found,
+    }
