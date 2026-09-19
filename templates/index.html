@@ -3,7 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Job Matcher | Kişiselleştirilmiş Kariyer Asistanı</title>
+    <title>AI Job Matcher</title>
+    <!-- Sekme ikonu: icon/ klasörü backend/main.py'de /icon yoluna mount ediliyor.
+         Meduza logosundan üretildi. Kaynak 532x469 ve KARE DEĞİL — doğrudan
+         kareye resize edilirse denizanası yatay olarak ezilir. Bu yüzden önce
+         şeffaf kenarlar kırpıldı (içerik kutusu 389x446), sonra kare tuvale
+         ortalandı.
+         Kenar boşluğu 16/32'de %5, 180'de %10: küçük boyutta %10 dolgu
+         denizanasını tanınmaz bir lekeye çeviriyordu.
+         180 ayrıca OPAK — iOS apple-touch-icon'u şeffaf bırakılırsa zemini
+         siyaha çeviriyor ve kırmızı denizana kayboluyor. -->
+    <!-- "?v=1" önbellek kırıcı. Bu dosyalar bir süre 404 döndü (HTML onlara
+         referans veriyordu ama dosyalar henüz üretilmemişti) ve Chrome 404'ü
+         önbelleğe aldı — normal yenileme (F5) bunu temizlemiyor, sekmede
+         varsayılan gri ikon kalıyordu. Farklı bir URL taze istek zorluyor.
+         Logo değişirse sayıyı artır. -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/icon/favicon-32.png?v=1">
+    <link rel="icon" type="image/png" sizes="16x16" href="/icon/favicon-16.png?v=1">
+    <link rel="apple-touch-icon" sizes="180x180" href="/icon/favicon-180.png?v=1">
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Tailwind Dark Mode Yapılandırması -->
     <script>
@@ -14,6 +31,33 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Inter', sans-serif; transition: background-color 0.3s, color 0.3s; }
+
+        /* ARKA PLAN GÖRSELİ (icon/1.png)
+           cover    : görsel ekranı tamamen kaplar, artan kısım kırpılır
+           fixed    : sayfa kaydırılırken görsel yerinde kalır — olmadan
+                      uzun sayfada yukarı kayıp ekrandan çıkar
+           center   : kırpma iki yandan eşit olur
+           Üstteki yarı saydam katman okunabilirlik için. Görsel çok açık
+           (ortalama parlaklık 230/255) olduğundan ince bir perde yetiyor,
+           desen görünür kalıyor. Perdeyi kaldırmak için alttaki iki
+           linear-gradient(...) katmanını sil. */
+        body {
+            background-image:
+                linear-gradient(rgba(255, 255, 255, 0.40), rgba(255, 255, 255, 0.40)),
+                url('/icon/1.png');
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            background-attachment: fixed;
+        }
+
+        /* Karanlık modda görsel açık kaldığı için üstüne koyu perde şart:
+           açık görsel + açık renk yazı okunmaz olurdu. */
+        .dark body {
+            background-image:
+                linear-gradient(rgba(2, 6, 23, 0.88), rgba(2, 6, 23, 0.88)),
+                url('/icon/1.png');
+        }
         .glass-card { 
             background: rgba(255, 255, 255, 0.95); 
             backdrop-filter: blur(10px); 
@@ -33,9 +77,21 @@
         /* Konum açılır listesi: karanlık modda seçenekler okunabilir kalsın
            (tarayıcı varsayılanı beyaz zeminde beyaz yazı yapabiliyor) */
         .dark select option { background-color: #1e293b; color: #f1f5f9; }
+
+        /* Hero başlığındaki kelime araları.
+           tracking-tighter harf aralığını -0.05em yapıyor; letter-spacing
+           boşluk karakterine de uygulandığı için kelimeler birbirine
+           yaklaşıyordu. word-spacing bir Inter boşluğu kadar (~0.26em) geri
+           ekliyor — yani kelime araları görsel olarak iki katına çıkıyor.
+           Tailwind'de word-spacing sınıfı yok, o yüzden burada. */
+        .hero-title { word-spacing: 0.26em; }
     </style>
 </head>
-<body class="bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-black min-h-screen p-4 md:p-8 text-slate-800 dark:text-slate-100">
+<!-- Arka plan gradyanı kaldırıldı: Tailwind'in bg-gradient-to-br sınıfı
+     background-image'ı kendisi ayarlıyor ve sınıf seçici (0,1,0) gövde
+     seçicisinden (0,0,1) daha güçlü olduğu için yukarıdaki görseli ezerdi.
+     Arka plan artık tamamen <style> bloğunda. -->
+<body class="min-h-screen p-4 md:p-8 text-slate-800 dark:text-slate-100">
     
     <!-- Gece/Gündüz Modu Butonu -->
     <button id="themeToggle" class="fixed top-4 right-4 md:top-6 md:right-8 p-3 rounded-full bg-white dark:bg-slate-800 shadow-lg border border-slate-200 dark:border-slate-700 text-2xl transition-all hover:scale-110 z-50 focus:outline-none">
@@ -46,10 +102,30 @@
         
         <!-- HEADER KISMI (Yeni Motivasyon Tasarımı) -->
         <div class="text-center space-y-6 mb-14">
-            
-            <h1 class="text-5xl md:text-6xl font-black tracking-tighter text-red-600 dark:text-red-500 uppercase drop-shadow-sm">
-                AI JOB MATCHER
-            </h1>
+
+            <!-- MEDUZA + BAŞLIK — tek satırda yan yana.
+                 Mutlak konumlandırma (position:absolute; left:0) yerine yan yana
+                 dizilim: başlık ortalanmış olduğu için sabit bir "left" değeri
+                 dar ekranda yazının üstüne biniyordu. Böylece logo her
+                 genişlikte başlığın tam yanında durur, üstüne binemez.
+                 object-contain: görsel kare değil (532x469) — kutuya kırpılmadan
+                 sığsın, oranı bozulmasın.
+
+                 Sondaki boş div bir DENGELEYİCİ: başlık ortalanmış bir öğe
+                 olduğu için, solunda logosuz kalsaydı başlık logonun genişliği
+                 kadar sağa kayar ve alttaki ortalanmış yazılarla hizası
+                 bozulurdu. Genişliği logoyla aynı (w-20), görünmez.
+
+                 lg altında alt alta: dar ekranda yan yana dizilim başlığı üç
+                 satıra kırıyordu. -->
+            <div class="flex flex-col lg:flex-row items-center justify-center gap-3 lg:gap-4">
+                <img src="/icon/Meduza-removebg-preview.png" alt="Meduza"
+                     class="w-20 h-20 object-contain drop-shadow-md shrink-0">
+                <h1 class="hero-title text-5xl md:text-6xl font-black tracking-tighter text-red-600 dark:text-red-500 uppercase drop-shadow-sm">
+                    AI JOB MATCHER
+                </h1>
+                <div class="hidden lg:block lg:w-20 lg:h-20 shrink-0" aria-hidden="true"></div>
+            </div>
 
             <div class="pt-4">
                 <h2 class="text-3xl md:text-5xl font-extrabold text-slate-900 dark:text-white leading-tight tracking-tight">
@@ -90,7 +166,13 @@
                             </label>
                         </div>
                         
-                        <button type="submit" id="profileBtn" class="w-full bg-slate-900 hover:bg-slate-800 dark:bg-red-600 dark:hover:bg-red-700 text-white font-bold py-3.5 rounded-xl transition-all shadow-md flex justify-center items-center gap-2">
+                        <!-- Kırmızı, "İlanları Analiz Et" kartındaki butonla aynı
+                             (bg-red-600 hover:bg-red-700). Eskiden açık modda
+                             lacivert (slate-900), koyu modda kırmızıydı; iki mod
+                             arasında renk değişince kullanıcı aynı butonu iki
+                             farklı buton gibi görüyordu. dark: varyantları artık
+                             gereksiz — iki modda da aynı renk. -->
+                        <button type="submit" id="profileBtn" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3.5 rounded-xl transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 flex justify-center items-center gap-2">
                             <span>Sisteme Kaydet</span>
                         </button>
                     </form>
@@ -128,7 +210,7 @@
                                 <select id="levelSelect" class="w-full border border-red-200 dark:border-red-800/50 bg-red-50/50 dark:bg-slate-800 p-3 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none transition-all dark:text-white cursor-pointer">
                                     <!-- "auto": CV'den tahmin edilen seviye + 1 kademe üstü.
                                          Etiketi profil kaydedilince JS günceller. -->
-                                    <option value="auto" selected>🎯 Bana Uygun</option>
+                                    <option value="auto" selected> 🤖 Bana Uygun</option>
                                     <option value="all">Tüm Seviyeler (filtresiz)</option>
                                     <option value="Internship">Staj / Internship</option>
                                     <option value="Entry Level">Giriş Seviyesi / Entry Level</option>
@@ -165,6 +247,19 @@
                 <div id="matchResult" class="space-y-4"></div>
             </div>
         </div>
+
+        <!-- FOOTER — sayfanın en altı -->
+        <footer class="pt-6 pb-10 text-center space-y-2 select-none">
+            <p class="text-red-500 dark:text-red-400 font-bold tracking-[0.15em] text-sm md:text-base">
+                Made with˚ʚ♡ɞ˚
+            </p>
+            <p class="text-red-600 dark:text-red-400 text-xs md:text-sm font-medium tracking-wide">
+                © 2026 İrem and Emre. All rights reserved.
+            </p>
+            <p style="font-weight: 700; opacity: 1 !important; color: #e05656 !important;">
+                Tüm hakları saklıdır · Made with love, not with cold applications ♡
+            </p>
+        </footer>
     </div>
 
     <script>
@@ -271,7 +366,7 @@
             if (!data || !data.seviye_tahmini) return;
 
             const etiket = data.seviye_tahmini_etiket || data.seviye_tahmini;
-            if (autoOpt) autoOpt.textContent = `🎯 Bana Uygun (${etiket})`;
+            if (autoOpt) autoOpt.textContent = `🤖 Bana Uygun (${etiket})`;
             levelSelect.value = 'auto';
 
             if (hint) {

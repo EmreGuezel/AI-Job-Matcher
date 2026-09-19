@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Form, UploadFile, File, Request
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 import pandas as pd
 import os
@@ -25,6 +26,15 @@ app = FastAPI(title="AI Job Matcher", description="Kişiselleştirilmiş İş E�
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 templates_path = os.path.join(BASE_DIR, "templates")
 templates = Jinja2Templates(directory=templates_path)
+
+# 1b. Sekme ikonu. index.html "/icon/..." yoluna referans veriyor; bu klasör
+# mount edilmezse tarayıcı 404 alır ve sekmede boş varsayılan ikon görünür.
+# check_dir kapalı: klasör yoksa uygulama açılışta çökmesin, sadece ikon olmasın.
+app.mount(
+    "/icon",
+    StaticFiles(directory=os.path.join(BASE_DIR, "icon"), check_dir=False),
+    name="icon",
+)
 
 # 2. Ana sayfayı index.html'den sun
 @app.get("/")
